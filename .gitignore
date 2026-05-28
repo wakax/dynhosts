@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# 設定ファイル（プライベート情報を含むため除外）
+config.yaml
+
+# ログ・バックアップ
+*.log
+dynhosts_backups/
+
+# タスク登録用の一時ファイル
+task_definition.xml
+tray_task_definition.xml
+
+# 旧 state 管理ファイル
+state.json
