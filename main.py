@@ -246,21 +246,24 @@ def auto_update_loop(interval_seconds: int) -> None:
 # システムトレイ
 # ---------------------------------------------------------------------------
 
-def build_icon_image():
-    """PIL で小さなトレイアイコン画像を生成する"""
+def build_icon_image(size: int = 64):
+    """PIL でアイコン画像を生成する（トレイアイコン・EXE アイコン共用）"""
     from PIL import Image, ImageDraw  # type: ignore
 
-    size = 64
+    def s(v: float) -> int:
+        # 基準サイズ 64px の座標を指定サイズにスケーリング
+        return max(1, round(v * size / 64))
+
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     # 背景円（濃い青）
-    draw.ellipse([2, 2, size - 2, size - 2], fill=(30, 80, 160, 255))
+    draw.ellipse([s(2), s(2), size - s(2), size - s(2)], fill=(30, 80, 160, 255))
     # "H" 文字（白）
-    lw = 6
-    draw.rectangle([14, 14, 14 + lw, size - 14], fill="white")
-    draw.rectangle([size - 14 - lw, 14, size - 14, size - 14], fill="white")
-    draw.rectangle([14, size // 2 - lw // 2, size - 14, size // 2 + lw // 2], fill="white")
+    lw = s(6)
+    draw.rectangle([s(14), s(14), s(14) + lw, size - s(14)], fill="white")
+    draw.rectangle([size - s(14) - lw, s(14), size - s(14), size - s(14)], fill="white")
+    draw.rectangle([s(14), size // 2 - lw // 2, size - s(14), size // 2 + lw // 2], fill="white")
 
     return img
 

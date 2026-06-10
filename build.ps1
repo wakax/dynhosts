@@ -14,6 +14,9 @@ $ErrorActionPreference = "Stop"
 # 依存パッケージと PyInstaller をインストール
 python -m pip install -r requirements.txt pyinstaller
 
+# EXE アイコンを生成（トレイアイコンと同じデザイン）
+python make_icon.py
+
 # ビルド
 python -m PyInstaller dynhosts.spec --noconfirm
 

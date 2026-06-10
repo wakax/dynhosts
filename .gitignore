@@ -16,6 +16,7 @@ tray_task_definition.xml
 # PyInstaller ビルド成果物
 build/
 dist/
+dynhosts.ico
 
 # 旧 state 管理ファイル
 state.json

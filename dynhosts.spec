@@ -4,6 +4,7 @@
 #
 # 使い方:
 #   pip install -r requirements.txt pyinstaller
+#   python make_icon.py          # EXE アイコン（dynhosts.ico）を生成
 #   pyinstaller dynhosts.spec --noconfirm
 #
 # 出力: dist/dynhosts.exe（単一ファイル・コンソール非表示）
@@ -48,6 +49,8 @@ exe = EXE(
     # コンソールウィンドウを表示しない（ログは dynhosts.log へ）
     console=False,
     disable_windowed_traceback=False,
+    # トレイアイコンと同じデザインの EXE アイコン（make_icon.py で生成）
+    icon='dynhosts.ico',
     # UAC 昇格はアプリ側で自前処理する（--no-elevate を有効にするため manifest では要求しない）
     uac_admin=False,
 )
