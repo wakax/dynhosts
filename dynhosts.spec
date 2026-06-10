@@ -7,7 +7,11 @@
 #   python make_icon.py          # EXE アイコン（dynhosts.ico）を生成
 #   pyinstaller dynhosts.spec --noconfirm
 #
-# 出力: dist/dynhosts.exe（単一ファイル・コンソール非表示）
+# 出力: dist/dynhosts/ フォルダ（onedir 形式・コンソール非表示）
+#
+# ※ onefile（単一 EXE）形式は Windows Defender 等に
+#    トロイの木馬として誤検知されやすい（自己展開構造がヒューリスティック検知の
+#    引き金になる）ため、onedir 形式で配布する。
 # =============================================================================
 
 from datetime import date
@@ -92,15 +96,13 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='dynhosts',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    runtime_tmpdir=None,
     # コンソールウィンドウを表示しない（ログは dynhosts.log へ）
     console=False,
     disable_windowed_traceback=False,
@@ -110,4 +112,13 @@ exe = EXE(
     version=version_info,
     # UAC 昇格はアプリ側で自前処理する（--no-elevate を有効にするため manifest では要求しない）
     uac_admin=False,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    name='dynhosts',
 )

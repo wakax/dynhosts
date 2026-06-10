@@ -160,21 +160,25 @@ Python と依存パッケージが入った環境で以下を実行します。
 
 | 出力 | 内容 |
 |---|---|
-| `dist\dynhosts.exe` | 単一実行ファイル（コンソール非表示） |
-| `dist\dynhosts.zip` | 配布用 ZIP（EXE + `config.yaml.example` + README） |
+| `dist\dynhosts\` | アプリ一式のフォルダ（`dynhosts.exe` + ランタイム） |
+| `dist\dynhosts.zip` | 配布用 ZIP（上記フォルダ + `config.yaml.example` + README） |
 
-手動でビルドする場合は `pip install -r requirements.txt pyinstaller` のうえ `pyinstaller dynhosts.spec --noconfirm` を実行してください。
+手動でビルドする場合は `pip install -r requirements.txt pyinstaller` のうえ `python make_icon.py` と `pyinstaller dynhosts.spec --noconfirm` を実行してください。
+
+> ビルドは onedir 形式（フォルダ配布）です。単一 EXE（onefile）形式は自己展開構造が
+> アンチウイルスのヒューリスティック検知（例: `Trojan:Win32/Bearfoos.A!ml`）に
+> 誤検知されやすいため採用していません。
 
 ### 利用（配布先の PC）
 
-1. ZIP を任意の**書き込み可能なフォルダ**に展開します（`config.yaml`・ログ・バックアップが EXE と同じフォルダに作られるため、`Program Files` 直下は避けてください）
-2. `dynhosts.exe` をダブルクリックして起動します（UAC ダイアログが表示されます）
+1. ZIP を任意の**書き込み可能な場所**に展開します（`config.yaml`・ログ・バックアップが EXE と同じフォルダに作られるため、`Program Files` 直下は避けてください）
+2. `dynhosts` フォルダ内の `dynhosts.exe` をダブルクリックして起動します（UAC ダイアログが表示されます）
    - 初回起動時に既定の `config.yaml` が自動生成され、設定画面が開きます
 3. 自動起動・定期更新を使う場合は、設定画面の「スタートアップ」タブから登録します（EXE のパスでタスクスケジューラーに登録されます）
 
 コマンドラインオプション（`--update` / `--install` / `--uninstall`）は Python 版と同じです。EXE はコンソール非表示のため、実行結果は `dynhosts.log` で確認してください。
 
-> **注意**: PyInstaller の単一 EXE 形式は、アンチウイルスソフトに誤検知されることがあります（特に本ツールは hosts ファイルを書き換えるため）。社内配布などで誤検知が問題になる場合は、コード署名を行うか、`dynhosts.spec` の `EXE` を onedir 形式に変更してフォルダごと配布することを検討してください。また、初回起動時に SmartScreen の警告が表示された場合は「詳細情報」→「実行」で起動できます。
+> **注意**: 署名のない EXE のため、ダウンロード直後は SmartScreen の警告が表示されることがあります（「詳細情報」→「実行」で起動できます）。それでもアンチウイルスに誤検知される場合は、[Microsoft への誤検知報告](https://www.microsoft.com/en-us/wdsi/filesubmission)を行うか、コード署名の導入を検討してください。
 
 ## ファイル構成
 
