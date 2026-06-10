@@ -66,11 +66,17 @@ def is_admin() -> bool:
 
 def elevate_and_restart() -> None:
     """UAC ダイアログを表示して管理者権限で再起動する"""
-    script = str(Path(__file__).resolve())
     params = " ".join([f'"{a}"' for a in sys.argv[1:]])
-    ctypes.windll.shell32.ShellExecuteW(
-        None, "runas", sys.executable, f'"{script}" {params}', None, 1
-    )
+    if IS_FROZEN:
+        # EXE 化時は sys.executable が自分自身なのでスクリプトパスを渡さない
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", sys.executable, params, None, 1
+        )
+    else:
+        script = str(Path(__file__).resolve())
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", sys.executable, f'"{script}" {params}', None, 1
+        )
     sys.exit(0)
 
 
@@ -78,9 +84,33 @@ def elevate_and_restart() -> None:
 # パス設定
 # ---------------------------------------------------------------------------
 
-BASE_DIR    = Path(__file__).parent.resolve()
+# PyInstaller 等で EXE 化されているか
+IS_FROZEN = bool(getattr(sys, "frozen", False))
+
+if IS_FROZEN:
+    # onefile 形式では __file__ が一時展開フォルダ(_MEIPASS)を指すため、
+    # config.yaml / ログは EXE 本体の隣に置く
+    BASE_DIR = Path(sys.executable).parent.resolve()
+else:
+    BASE_DIR = Path(__file__).parent.resolve()
+
 CONFIG_PATH = BASE_DIR / "config.yaml"
 LOG_PATH    = BASE_DIR / "dynhosts.log"
+
+
+def get_launch_command(extra_args: str = "") -> tuple[str, str]:
+    """
+    タスクスケジューラ・ショートカット登録用の (実行ファイル, 引数) を返す。
+    EXE 化時は EXE 自身、スクリプト実行時は pythonw.exe + main.py。
+    """
+    if IS_FROZEN:
+        return sys.executable, extra_args
+    # pythonw.exe はコンソールウィンドウを表示しない Windows 専用実行ファイル
+    pythonw = Path(sys.executable).parent / "pythonw.exe"
+    python_exe = str(pythonw) if pythonw.exists() else sys.executable
+    script_path = str(Path(__file__).resolve())
+    args = f'"{script_path}"' + (f" {extra_args}" if extra_args else "")
+    return python_exe, args
 
 
 # ---------------------------------------------------------------------------
@@ -94,13 +124,15 @@ def setup_logging() -> None:
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+    # windowed EXE（--noconsole）では sys.stdout が None になるためファイルのみに出力
+    handlers: list[logging.Handler] = [logging.FileHandler(LOG_PATH, encoding="utf-8")]
+    if sys.stdout is not None:
+        handlers.append(logging.StreamHandler(sys.stdout))
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOG_PATH, encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
+        handlers=handlers,
     )
 
 
@@ -214,21 +246,24 @@ def auto_update_loop(interval_seconds: int) -> None:
 # システムトレイ
 # ---------------------------------------------------------------------------
 
-def build_icon_image():
-    """PIL で小さなトレイアイコン画像を生成する"""
+def build_icon_image(size: int = 64):
+    """PIL でアイコン画像を生成する（トレイアイコン・EXE アイコン共用）"""
     from PIL import Image, ImageDraw  # type: ignore
 
-    size = 64
+    def s(v: float) -> int:
+        # 基準サイズ 64px の座標を指定サイズにスケーリング
+        return max(1, round(v * size / 64))
+
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     # 背景円（濃い青）
-    draw.ellipse([2, 2, size - 2, size - 2], fill=(30, 80, 160, 255))
+    draw.ellipse([s(2), s(2), size - s(2), size - s(2)], fill=(30, 80, 160, 255))
     # "H" 文字（白）
-    lw = 6
-    draw.rectangle([14, 14, 14 + lw, size - 14], fill="white")
-    draw.rectangle([size - 14 - lw, 14, size - 14, size - 14], fill="white")
-    draw.rectangle([14, size // 2 - lw // 2, size - 14, size // 2 + lw // 2], fill="white")
+    lw = s(6)
+    draw.rectangle([s(14), s(14), s(14) + lw, size - s(14)], fill="white")
+    draw.rectangle([size - s(14) - lw, s(14), size - s(14), size - s(14)], fill="white")
+    draw.rectangle([s(14), size // 2 - lw // 2, size - s(14), size // 2 + lw // 2], fill="white")
 
     return img
 
@@ -358,10 +393,7 @@ TRAY_TASK_NAME = "dynhosts-tray"
 
 def install_task_scheduler() -> None:
     """Windows タスクスケジューラにアップデートタスクを登録する"""
-    # pythonw.exe を使いコンソールウィンドウを表示しない
-    pythonw = Path(sys.executable).parent / "pythonw.exe"
-    python_exe = str(pythonw) if pythonw.exists() else sys.executable
-    script_path = str(Path(__file__).resolve())
+    command, arguments = get_launch_command("--update")
     interval_min = 60  # デフォルト60分
 
     # 設定ファイルから間隔を読み込む
@@ -404,8 +436,8 @@ def install_task_scheduler() -> None:
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>"{python_exe}"</Command>
-      <Arguments>"{script_path}" --update</Arguments>
+      <Command>"{command}"</Command>
+      <Arguments>{arguments}</Arguments>
       <WorkingDirectory>{BASE_DIR}</WorkingDirectory>
     </Exec>
   </Actions>
@@ -421,10 +453,10 @@ def install_task_scheduler() -> None:
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
         if result.returncode == 0:
-            print(f"[OK] タスクスケジューラへの登録が完了しました: {TASK_NAME}")
-            print(f"     更新間隔: {interval_min} 分")
+            logging.info("タスクスケジューラへの登録が完了しました: %s (更新間隔: %d 分)",
+                         TASK_NAME, interval_min)
         else:
-            print(f"[ERROR] 登録失敗:\n{result.stderr}")
+            logging.error("タスク登録失敗:\n%s", result.stderr)
     finally:
         xml_path.unlink(missing_ok=True)
 
@@ -437,17 +469,14 @@ def uninstall_task_scheduler() -> None:
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     if result.returncode == 0:
-        print(f"[OK] タスクを削除しました: {TASK_NAME}")
+        logging.info("タスクを削除しました: %s", TASK_NAME)
     else:
-        print(f"[ERROR] 削除失敗:\n{result.stderr}")
+        logging.error("タスク削除失敗:\n%s", result.stderr)
 
 
 def install_tray_task() -> None:
     """ログオン時にシステムトレイを管理者権限で自動起動するタスクを登録する"""
-    # pythonw.exe はコンソールウィンドウを表示しない Windows 専用実行ファイル
-    pythonw = Path(sys.executable).parent / "pythonw.exe"
-    python_exe = str(pythonw) if pythonw.exists() else sys.executable
-    script_path = str(Path(__file__).resolve())
+    command, arguments = get_launch_command()
 
     xml_content = f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -472,8 +501,8 @@ def install_tray_task() -> None:
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>"{python_exe}"</Command>
-      <Arguments>"{script_path}"</Arguments>
+      <Command>"{command}"</Command>
+      <Arguments>{arguments}</Arguments>
       <WorkingDirectory>{BASE_DIR}</WorkingDirectory>
     </Exec>
   </Actions>
@@ -489,9 +518,9 @@ def install_tray_task() -> None:
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
         if result.returncode == 0:
-            print(f"[OK] ログオン時自動起動タスクを登録しました: {TRAY_TASK_NAME}")
+            logging.info("ログオン時自動起動タスクを登録しました: %s", TRAY_TASK_NAME)
         else:
-            print(f"[ERROR] 登録失敗:\n{result.stderr}")
+            logging.error("タスク登録失敗:\n%s", result.stderr)
     finally:
         xml_path.unlink(missing_ok=True)
 
@@ -504,9 +533,9 @@ def uninstall_tray_task() -> None:
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     if result.returncode == 0:
-        print(f"[OK] タスクを削除しました: {TRAY_TASK_NAME}")
+        logging.info("タスクを削除しました: %s", TRAY_TASK_NAME)
     else:
-        print(f"[ERROR] 削除失敗:\n{result.stderr}")
+        logging.error("タスク削除失敗:\n%s", result.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -523,16 +552,14 @@ def _start_menu_dir() -> Path:
 
 def install_start_menu() -> None:
     """スタートメニューに dynhosts のショートカットを作成する"""
-    pythonw = Path(sys.executable).parent / "pythonw.exe"
-    python_exe = str(pythonw) if pythonw.exists() else sys.executable
-    script_path = str(Path(__file__).resolve())
+    command, arguments = get_launch_command()
     lnk_path = _start_menu_dir() / SHORTCUT_NAME
 
     # WScript.Shell COM で .lnk を生成し、「管理者として実行」フラグを付ける
     ps_script = (
         f'$s = (New-Object -ComObject WScript.Shell).CreateShortcut("{lnk_path}");'
-        f'$s.TargetPath = "{python_exe}";'
-        f'$s.Arguments = \'"{script_path}"\';'
+        f'$s.TargetPath = "{command}";'
+        f'$s.Arguments = \'{arguments}\';'
         f'$s.WorkingDirectory = "{BASE_DIR}";'
         f'$s.Description = "dynhosts - hostsファイル自動更新ツール";'
         f'$s.Save();'
@@ -548,9 +575,9 @@ def install_start_menu() -> None:
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     if result.returncode == 0:
-        print(f"[OK] スタートメニューにショートカットを作成しました: {lnk_path}")
+        logging.info("スタートメニューにショートカットを作成しました: %s", lnk_path)
     else:
-        print(f"[ERROR] ショートカット作成失敗:\n{result.stderr}")
+        logging.error("ショートカット作成失敗:\n%s", result.stderr)
 
 
 def uninstall_start_menu() -> None:
@@ -558,9 +585,9 @@ def uninstall_start_menu() -> None:
     lnk_path = _start_menu_dir() / SHORTCUT_NAME
     if lnk_path.exists():
         lnk_path.unlink()
-        print(f"[OK] ショートカットを削除しました: {lnk_path}")
+        logging.info("ショートカットを削除しました: %s", lnk_path)
     else:
-        print(f"[INFO] ショートカットが見つかりません（スキップ）: {lnk_path}")
+        logging.info("ショートカットが見つかりません（スキップ）: %s", lnk_path)
 
 
 # ---------------------------------------------------------------------------
@@ -570,6 +597,15 @@ def uninstall_start_menu() -> None:
 def main() -> None:
     set_dpi_awareness()   # UI 生成前に DPI 宣言（ぼやけ防止）
     setup_logging()
+
+    # 初回起動時（EXE 配布直後など）は既定の設定ファイルを生成する
+    if not CONFIG_PATH.exists():
+        try:
+            from settings_gui import save_config  # type: ignore
+            save_config(CONFIG_PATH, {"settings": {}, "entries": []})
+            logging.info("既定の設定ファイルを生成しました: %s", CONFIG_PATH)
+        except Exception as exc:
+            logging.warning("設定ファイルの生成に失敗: %s", exc)
 
     parser = argparse.ArgumentParser(
         description="dynhosts: FQDNをDNS解決してhostsファイルを自動更新するツール"
