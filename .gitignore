@@ -1,0 +1,11 @@
+# 設定ファイル（プライベート情報を含むため除外）
+config.yaml
+
+# ログ・バックアップ
+*.log
+dynhosts_backups/
+
+# Go ビルド成果物
+dist/
+rsrc.syso
+*.exe
