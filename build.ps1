@@ -11,28 +11,27 @@ $OutExe = Join-Path $OutDir "dynhosts.exe"
 
 Write-Host "=== dynhosts Go ビルド ===" -ForegroundColor Cyan
 
-# ── rsrc インストール ──────────────────────────────────────────────────────
-Write-Host "[1/4] rsrc ツールを確認中..."
+# ── goversioninfo インストール ────────────────────────────────────────────
+Write-Host "[1/4] goversioninfo ツールを確認中..."
 $gopathBin = Join-Path (& go env GOPATH) "bin"
 $env:PATH += ";$gopathBin"
 
-if (-not (Get-Command rsrc -ErrorAction SilentlyContinue)) {
-    Write-Host "  rsrc をインストールします..."
-    go install github.com/akavel/rsrc@latest
+if (-not (Get-Command goversioninfo -ErrorAction SilentlyContinue)) {
+    Write-Host "  goversioninfo をインストールします..."
+    go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
 }
 
 # ── リソースファイル生成 ───────────────────────────────────────────────────
 Write-Host "[2/4] Windows リソース (rsrc.syso) を生成中..."
-$ManifestPath = Join-Path $Root "dynhosts.manifest"
-$IcoPath      = Join-Path $Root "dynhosts.ico"
-$SysoPath     = Join-Path $Root "rsrc.syso"
+$SysoPath        = Join-Path $Root "rsrc.syso"
+$VersionInfoPath = Join-Path $Root "versioninfo.json"
 
-if (Test-Path $IcoPath) {
-    & rsrc -manifest $ManifestPath -ico $IcoPath -o $SysoPath
-    Write-Host "  rsrc.syso を生成しました（アイコン + マニフェスト）。"
-} else {
-    Write-Host "  dynhosts.ico が見つかりません。マニフェストのみ埋め込みます。"
-    & rsrc -manifest $ManifestPath -o $SysoPath
+Push-Location $Root
+try {
+    & goversioninfo -o $SysoPath $VersionInfoPath
+    Write-Host "  rsrc.syso を生成しました（アイコン + マニフェスト + バージョン情報）。"
+} finally {
+    Pop-Location
 }
 
 # ── go mod tidy ───────────────────────────────────────────────────────────
@@ -56,7 +55,7 @@ try {
 }
 
 # ── 補助ファイルをコピー ──────────────────────────────────────────────────
-foreach ($f in @("config.yaml.example", "README.md", "dynhosts.ico")) {
+foreach ($f in @("README.md", "dynhosts.ico")) {
     $src = Join-Path $Root $f
     if (Test-Path $src) { Copy-Item $src $OutDir -Force }
 }
