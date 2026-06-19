@@ -197,7 +197,11 @@ func createSettingsWindow(cfgPath string, onSave func(bool)) {
 
 	startupTab, startupSetup := buildStartupTab(&mw)
 
-	icon, _ := loadIcon()
+	// interface{} に代入しないと型付き nil が walk にわたりパニックする
+	var icon interface{}
+	if i, err := loadIcon(); err == nil {
+		icon = i
+	}
 
 	if err := (MainWindow{
 		AssignTo: &mw,

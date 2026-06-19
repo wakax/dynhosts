@@ -10,7 +10,7 @@
     },
     "StringFileInfo": {
         "CompanyName":      "wakax",
-        "FileDescription":  "FQDN を DNS 解決して hosts ファイルを自動更新するツール",
+        "FileDescription":  "dynhosts",
         "FileVersion":      "1.0.0.0",
         "InternalName":     "dynhosts",
         "LegalCopyright":   "Copyright (C) 2026 wakax",

@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"io"
@@ -18,6 +19,9 @@ import (
 	"github.com/lxn/win"
 	"golang.org/x/sys/windows"
 )
+
+//go:embed dynhosts.ico
+var embeddedIcon []byte
 
 func init() {
 	// walk および Win32 GUI は OS のメインスレッドでのみ動作する
@@ -259,7 +263,7 @@ func buildTrayMenu() {
 	updateNow := walk.NewAction()
 	updateNow.SetText("今すぐ更新")
 	updateNow.Triggered().Attach(func() {
-		ni.ShowMessage("dynhosts", "hostsファイルを更新中...") //nolint:errcheck
+		ni.ShowMessage("", "hostsファイルを更新中...") //nolint:errcheck
 		go runUpdate()
 	})
 	menu.Actions().Add(updateNow) //nolint:errcheck
@@ -331,7 +335,7 @@ func onSettingsSaved(updateNow bool) {
 	default:
 	}
 	if updateNow {
-		ni.ShowMessage("dynhosts", "hostsファイルを更新中...") //nolint:errcheck
+		ni.ShowMessage("", "hostsファイルを更新中...") //nolint:errcheck
 		go runUpdate()
 	}
 }
@@ -449,17 +453,30 @@ func setupLogging(logPath string) {
 }
 
 func loadIcon() (*walk.Icon, error) {
-	// rsrc で埋め込んだアイコン（リソース ID 1）を優先
+	// EXE リソース (ID 1) を優先
 	if icon, err := walk.NewIconFromResourceId(1); err == nil {
 		return icon, nil
 	}
-	// EXE 隣の .ico にフォールバック
+	// go:embed で埋め込んだバイト列を一時ファイル経由でロード
+	if tmp, err := os.CreateTemp("", "dynhosts*.ico"); err == nil {
+		name := tmp.Name()
+		_, werr := tmp.Write(embeddedIcon)
+		tmp.Close()
+		if werr == nil {
+			if icon, err := walk.NewIconFromFile(name); err == nil {
+				os.Remove(name)
+				return icon, nil
+			}
+		}
+		os.Remove(name)
+	}
+	// さらに EXE 隣の .ico にフォールバック
 	exe, _ := os.Executable()
 	icoPath := filepath.Join(filepath.Dir(exe), "dynhosts.ico")
 	if _, err := os.Stat(icoPath); err == nil {
 		return walk.NewIconFromFile(icoPath)
 	}
-	return nil, fmt.Errorf("dynhosts.ico が見つかりません")
+	return nil, fmt.Errorf("アイコンが見つかりません")
 }
 
 func shellOpen(path string) {

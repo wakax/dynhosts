@@ -55,7 +55,7 @@ try {
 }
 
 # ── 補助ファイルをコピー ──────────────────────────────────────────────────
-foreach ($f in @("README.md", "dynhosts.ico")) {
+foreach ($f in @("README.md")) {
     $src = Join-Path $Root $f
     if (Test-Path $src) { Copy-Item $src $OutDir -Force }
 }
