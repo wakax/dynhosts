@@ -121,7 +121,7 @@ dynhosts.exe [オプション]
 
 ## ビルド
 
-Go 1.21 以上と [`rsrc`](https://github.com/akavel/rsrc) ツールが必要です。
+Go 1.21 以上が必要です。初回ビルド時に [`goversioninfo`](https://github.com/josephspurrier/goversioninfo) が自動インストールされます。
 
 ```powershell
 .\build.ps1
@@ -129,9 +129,9 @@ Go 1.21 以上と [`rsrc`](https://github.com/akavel/rsrc) ツールが必要で
 
 | 出力 | 内容 |
 |---|---|
-| `dist\dynhosts\dynhosts.exe` | 配布用 EXE |
+| `dist\dynhosts\dynhosts.exe` | 配布用 EXE（バージョン情報・アイコン埋め込み済み） |
 
-> **onedir 形式ではなく単一 EXE です。** ただし署名のない EXE のため、SmartScreen の警告が表示されることがあります（「詳細情報」→「実行」で起動できます）。
+> 署名のない EXE のため、SmartScreen の警告が表示されることがあります（「詳細情報」→「実行」で起動できます）。
 
 ## ファイル構成
 
@@ -144,6 +144,8 @@ dynhosts/
 ├── scheduler.go      # タスクスケジューラー連携・スタートメニュー
 ├── go.mod / go.sum   # Go モジュール定義
 ├── dynhosts.manifest # Windows マニフェスト（管理者権限・DPI 対応）
+├── dynhosts.ico      # アプリアイコン
+├── versioninfo.json  # EXE バージョン情報定義
 ├── build.ps1         # ビルドスクリプト
 ├── config.yaml       # 設定ファイル（自動生成）
 └── dynhosts.log      # 実行ログ（自動生成）
