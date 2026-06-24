@@ -34,6 +34,7 @@ type Settings struct {
 	HostsFile      string `yaml:"hosts_file"`
 	Backup         bool   `yaml:"backup"`
 	BackupCount    int    `yaml:"backup_count"`
+	RestoreOnExit  bool   `yaml:"restore_on_exit"`
 }
 
 type Config struct {
@@ -113,6 +114,9 @@ func SaveConfig(path string, cfg Config) error {
 		"",
 		"  # バックアップの保持世代数",
 		fmt.Sprintf("  backup_count: %d", s.BackupCount),
+		"",
+		"  # 終了時にhostsファイルの管理セクションを削除して元に戻す",
+		fmt.Sprintf("  restore_on_exit: %v", s.RestoreOnExit),
 		"",
 		"# =============================================================================",
 		"# 管理エントリー一覧",

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"github.com/lxn/win"
@@ -194,6 +195,7 @@ func createSettingsWindow(cfgPath string, onSave func(bool)) {
 	var hostsFileEdit *walk.LineEdit
 	var backupCB *walk.CheckBox
 	var backupCountEdit *walk.NumberEdit
+	var restoreOnExitCB *walk.CheckBox
 
 	startupTab, startupSetup := buildStartupTab(&mw)
 
@@ -223,8 +225,8 @@ func createSettingsWindow(cfgPath string, onSave func(bool)) {
 								AssignTo:         &tv,
 								AlternatingRowBG: true,
 								CheckBoxes:       true,
-								ColumnsOrderable:  false,
-								MinSize:           Size{Width: 850, Height: 360},
+								ColumnsOrderable: false,
+								MinSize:          Size{Width: 850, Height: 360},
 								Columns: []TableViewColumn{
 									{Title: "有効", Width: 40},
 									{Title: "名前", Width: 200},
@@ -322,71 +324,102 @@ func createSettingsWindow(cfgPath string, onSave func(bool)) {
 					// ── Tab 2: 基本設定 ──────────────────────────────
 					{
 						Title:  "  基本設定  ",
-						Layout: Grid{Columns: 2},
+						Layout: VBox{},
 						Children: []Widget{
-							Label{Text: "更新間隔（秒）:"},
 							Composite{
-								Layout: HBox{MarginsZero: true},
+								Layout: Grid{Columns: 2},
 								Children: []Widget{
-									NumberEdit{
-										AssignTo: &intervalEdit,
-										Value:    float64(cfg.Settings.UpdateInterval),
-										MinValue: 60,
-										MaxValue: 86400,
-										Decimals: 0,
-										MinSize:  Size{Width: 80},
-										MaxSize:  Size{Width: 80},
-		},
-									HSpacer{},
-								},
-							},
-							Label{Text: "DNS サーバー（空 = OS 既定）:"},
-							LineEdit{AssignTo: &dnsEdit, Text: cfg.Settings.DNSServer,},
-							Label{Text: "hosts ファイルのパス:"},
-							Composite{
-								Layout: HBox{MarginsZero: true},
-								Children: []Widget{
-									LineEdit{
-										AssignTo: &hostsFileEdit,
-										Text:     cfg.Settings.HostsFile,
-		},
-									PushButton{
-										Text:    "参照…",
-										MinSize: Size{Width: 90},
-										MaxSize: Size{Width: 90},
-										OnClicked: func() {
-											dlg := new(walk.FileDialog)
-											dlg.Title = "hosts ファイルを選択"
-											dlg.Filter = "すべてのファイル (*.*)|*.*"
-											if ok, err := dlg.ShowOpen(mw); err == nil && ok {
-												hostsFileEdit.SetText(dlg.FilePath)
-											}
+									Label{Text: "更新間隔（秒）:"},
+									Composite{
+										Layout: HBox{MarginsZero: true},
+										Children: []Widget{
+											NumberEdit{
+												AssignTo: &intervalEdit,
+												Value:    float64(cfg.Settings.UpdateInterval),
+												MinValue: 60,
+												MaxValue: 86400,
+												Decimals: 0,
+												MinSize:  Size{Width: 80},
+												MaxSize:  Size{Width: 80},
+											},
+											HSpacer{},
+										},
+									},
+									Label{Text: "DNS サーバー（空 = OS 既定）:"},
+									LineEdit{AssignTo: &dnsEdit, Text: cfg.Settings.DNSServer},
+									Label{Text: "hosts ファイルのパス:"},
+									Composite{
+										Layout: HBox{MarginsZero: true},
+										Children: []Widget{
+											LineEdit{
+												AssignTo: &hostsFileEdit,
+												Text:     cfg.Settings.HostsFile,
+											},
+											PushButton{
+												Text:    "参照…",
+												MinSize: Size{Width: 90},
+												MaxSize: Size{Width: 90},
+												OnClicked: func() {
+													dlg := new(walk.FileDialog)
+													dlg.Title = "hosts ファイルを選択"
+													dlg.Filter = "すべてのファイル (*.*)|*.*"
+													dlg.FilePath = hostsFileEdit.Text()
+													if ok, err := dlg.ShowOpen(mw); err == nil && ok {
+														hostsFileEdit.SetText(dlg.FilePath)
+													}
+												},
+											},
+										},
+									},
+									CheckBox{
+										AssignTo:   &restoreOnExitCB,
+										Text:       "終了時にhostsを元に戻す　※定期自動更新タスクが登録済みの場合は次回更新時に上書きされます",
+										Checked:    cfg.Settings.RestoreOnExit,
+										ColumnSpan: 2,
+									},
+									CheckBox{
+										AssignTo:   &backupCB,
+										Text:       "更新前にバックアップを取る",
+										Checked:    cfg.Settings.Backup,
+										ColumnSpan: 2,
+									},
+									Label{Text: "バックアップ保持世代数:"},
+									Composite{
+										Layout: HBox{MarginsZero: true},
+										Children: []Widget{
+											NumberEdit{
+												AssignTo: &backupCountEdit,
+												Value:    float64(cfg.Settings.BackupCount),
+												MinValue: 1,
+												MaxValue: 100,
+												Decimals: 0,
+												MinSize:  Size{Width: 80},
+												MaxSize:  Size{Width: 80},
+											},
+											HSpacer{},
 										},
 									},
 								},
 							},
-							CheckBox{
-								AssignTo:   &backupCB,
-								Text:       "更新前にバックアップを取る",
-								Checked:    cfg.Settings.Backup,
-								ColumnSpan: 2,
-							},
-							Label{Text: "バックアップ保持世代数:"},
 							Composite{
 								Layout: HBox{MarginsZero: true},
 								Children: []Widget{
-									NumberEdit{
-										AssignTo: &backupCountEdit,
-										Value:    float64(cfg.Settings.BackupCount),
-										MinValue: 1,
-										MaxValue: 100,
-										Decimals: 0,
-										MinSize:  Size{Width: 80},
-										MaxSize:  Size{Width: 80},
-		},
+									PushButton{
+										Text:      "設定ファイルを開く",
+										MinSize:   Size{Width: 135},
+										MaxSize:   Size{Width: 135},
+										OnClicked: func() { shellOpen(cfgPath) },
+									},
+									PushButton{
+										Text:      "ログを開く",
+										MinSize:   Size{Width: 110},
+										MaxSize:   Size{Width: 110},
+										OnClicked: func() { openLogFile() },
+									},
 									HSpacer{},
 								},
 							},
+							VSpacer{},
 						},
 					},
 
@@ -402,7 +435,7 @@ func createSettingsWindow(cfgPath string, onSave func(bool)) {
 						MinSize: Size{Width: 120},
 						MaxSize: Size{Width: 120},
 						OnClicked: func() {
-							saveCfg := collectSettings(cfg, model, intervalEdit, dnsEdit, hostsFileEdit, backupCB, backupCountEdit)
+							saveCfg := collectSettings(cfg, model, intervalEdit, dnsEdit, hostsFileEdit, backupCB, backupCountEdit, restoreOnExitCB)
 							if err := SaveConfig(cfgPath, saveCfg); err != nil {
 								walk.MsgBox(mw, "エラー", "設定の保存に失敗しました:\n"+err.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
 								return
@@ -459,7 +492,7 @@ func createSettingsWindow(cfgPath string, onSave func(bool)) {
 func collectSettings(base Config, model *EntryModel,
 	intervalEdit *walk.NumberEdit, dnsEdit *walk.LineEdit,
 	hostsFileEdit *walk.LineEdit, backupCB *walk.CheckBox,
-	backupCountEdit *walk.NumberEdit) Config {
+	backupCountEdit *walk.NumberEdit, restoreOnExitCB *walk.CheckBox) Config {
 
 	cfg := base
 	cfg.Settings.UpdateInterval = int(intervalEdit.Value())
@@ -467,6 +500,7 @@ func collectSettings(base Config, model *EntryModel,
 	cfg.Settings.HostsFile = strings.TrimSpace(hostsFileEdit.Text())
 	cfg.Settings.Backup = backupCB.Checked()
 	cfg.Settings.BackupCount = int(backupCountEdit.Value())
+	cfg.Settings.RestoreOnExit = restoreOnExitCB.Checked()
 	cfg.Entries = make([]Entry, len(model.items))
 	copy(cfg.Entries, model.items)
 	return cfg

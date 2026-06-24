@@ -202,3 +202,41 @@ func UpdateHostsFile(cfg Config) (success, failure int, err error) {
 	log.Printf("hostsファイルを更新しました: %s (成功: %d, 失敗: %d)", hostsPath, success, failure)
 	return success, failure, nil
 }
+
+// RestoreHostsFile は hosts ファイルから dynhosts 管理セクションを削除して元の状態に戻す。
+func RestoreHostsFile(cfg Config) error {
+	hostsPath := cfg.Settings.HostsFile
+	if hostsPath == "" {
+		hostsPath = `C:\Windows\System32\drivers\etc\hosts`
+	}
+
+	content, err := os.ReadFile(hostsPath)
+	if err != nil {
+		return fmt.Errorf("hostsファイル読み込みエラー: %w", err)
+	}
+
+	var kept []string
+	inside := false
+	for _, line := range strings.Split(string(content), "\n") {
+		stripped := strings.TrimSpace(line)
+		if stripped == markerBegin {
+			inside = true
+			continue
+		}
+		if stripped == markerEnd {
+			inside = false
+			continue
+		}
+		if !inside {
+			kept = append(kept, line)
+		}
+	}
+
+	restored := strings.TrimRight(strings.Join(kept, "\n"), "\r\n\t ") + "\n"
+	if err := os.WriteFile(hostsPath, []byte(restored), 0644); err != nil {
+		return fmt.Errorf("hostsファイル書き込みエラー: %w", err)
+	}
+
+	log.Println("hostsファイルを元に戻しました")
+	return nil
+}

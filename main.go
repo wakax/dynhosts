@@ -96,9 +96,9 @@ func main() {
 	}
 
 	if *uninstallFlag {
-		UninstallUpdateTask()  //nolint:errcheck
-		UninstallTrayTask()    //nolint:errcheck
-		UninstallStartMenu()   //nolint:errcheck
+		UninstallUpdateTask() //nolint:errcheck
+		UninstallTrayTask()   //nolint:errcheck
+		UninstallStartMenu()  //nolint:errcheck
 		return
 	}
 
@@ -149,7 +149,7 @@ func ensureSingleInstance() bool {
 	// ビルド時に Go リンカーが実行中 EXE を dynhosts.exe~ 等にリネームする場合があるため
 	// /IM はワイルドカードで一括対応する
 	exe, _ := os.Executable()
-	exeBase := filepath.Base(exe) // "dynhosts.exe"
+	exeBase := filepath.Base(exe)                                      // "dynhosts.exe"
 	exeWild := exeBase[:len(exeBase)-len(filepath.Ext(exeBase))] + "*" // "dynhosts*"
 	cmd := exec.Command("taskkill",
 		"/FI", fmt.Sprintf("PID ne %d", os.Getpid()),
@@ -206,6 +206,11 @@ func runTray() {
 			close(stopCh)
 			if ni != nil {
 				ni.SetVisible(false) //nolint:errcheck
+			}
+			if cfg, err := LoadConfig(configPath); err == nil && cfg.Settings.RestoreOnExit {
+				if err := RestoreHostsFile(cfg); err != nil {
+					log.Printf("hosts復元エラー: %v", err)
+				}
 			}
 		})
 	})
@@ -297,7 +302,11 @@ func buildTrayMenu() {
 
 	openLogAction := walk.NewAction()
 	openLogAction.SetText("ログを開く")
-	openLogAction.Triggered().Attach(func() { shellOpen(logPath) })
+	openLogAction.Triggered().Attach(func() {
+		cmd := exec.Command("notepad.exe", logPath)
+		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000}
+		cmd.Start() //nolint:errcheck
+	})
 	menu.Actions().Add(openLogAction) //nolint:errcheck
 
 	menu.Actions().Add(walk.NewSeparatorAction()) //nolint:errcheck
@@ -311,6 +320,11 @@ func buildTrayMenu() {
 		if settingsMW != nil {
 			settingsMW.Dispose()
 			settingsMW = nil
+		}
+		if cfg, err := LoadConfig(configPath); err == nil && cfg.Settings.RestoreOnExit {
+			if err := RestoreHostsFile(cfg); err != nil {
+				log.Printf("hosts復元エラー: %v", err)
+			}
 		}
 		os.Exit(0)
 	})
@@ -373,6 +387,21 @@ func runUpdate() {
 	}
 
 	hostMW.Synchronize(updateTrayStatus)
+
+	var msg string
+	if ferr != nil {
+		msg = "更新エラー: " + ferr.Error()
+	} else {
+		msg = fmt.Sprintf("更新完了 (成功:%d 失敗:%d)", s, f)
+	}
+	go func() {
+		// 「更新中」バルーンを閉じてから結果を表示する
+		hostMW.Synchronize(func() { ni.ShowMessage("", "") }) //nolint:errcheck
+		time.Sleep(500 * time.Millisecond)
+		hostMW.Synchronize(func() { ni.ShowMessage("dynhosts", msg) }) //nolint:errcheck
+		time.Sleep(3 * time.Second)
+		hostMW.Synchronize(func() { ni.ShowMessage("", "") }) //nolint:errcheck
+	}()
 }
 
 func updateTrayStatus() {
@@ -481,6 +510,12 @@ func loadIcon() (*walk.Icon, error) {
 
 func shellOpen(path string) {
 	cmd := exec.Command("cmd", "/c", "start", "", path)
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000}
+	cmd.Start() //nolint:errcheck
+}
+
+func openLogFile() {
+	cmd := exec.Command("notepad.exe", logPath)
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000}
 	cmd.Start() //nolint:errcheck
 }
